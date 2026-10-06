@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tarix baraban o'yini</title>
+<style>
+:root{--bg:#16343a;--panel:#e9e4d6;--ink:#1d2a2c;--brass:#c9a24b}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:var(--bg);color:var(--panel);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;display:flex;flex-direction:column;align-items:center;padding:22px 14px 44px}
+h1{font:700 clamp(1.5rem,6vw,2.3rem)/1.15 "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;margin:.2em 0 .15em;text-align:center}
+.sub{margin:0 0 20px;opacity:.8;text-align:center}
+.stage{position:relative;width:min(90vw,460px);aspect-ratio:1;margin:8px 0 22px}
+.ptr{position:absolute;top:-16px;left:50%;transform:translateX(-50%);width:0;height:0;border:15px solid transparent;border-top:32px solid var(--panel);border-bottom:0;filter:drop-shadow(0 2px 2px #0009);z-index:2}
+canvas{width:100%;height:100%;display:block;border-radius:50%;box-shadow:0 0 0 8px var(--brass),0 14px 32px #0007;transition:transform 5s cubic-bezier(.12,.7,.1,1)}
+button{font:inherit;cursor:pointer}
+button:focus-visible{outline:3px solid var(--brass);outline-offset:2px}
+.spin{background:var(--brass);color:#2a2108;border:0;border-radius:999px;padding:14px 38px;font-weight:700;font-size:1.1rem;letter-spacing:.04em}
+.spin:disabled,.ghost:disabled{opacity:.4;cursor:not-allowed}
+.card{width:min(92vw,460px);min-height:96px;margin:20px 0 6px;padding:16px 18px;background:var(--panel);color:var(--ink);border-radius:10px;text-align:center;display:flex;flex-direction:column;justify-content:center;gap:8px}
+.card b{font:700 1.5rem/1.2 "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif}
+.card .w{font:700 clamp(1.3rem,6vw,1.8rem)/1.15 "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif}
+.card .question{font:700 clamp(1.35rem,6vw,1.8rem)/1.25 system-ui,sans-serif}
+.card .progress{opacity:.65;font-size:.9rem}
+.card .next-in-card{background:var(--brass);color:#2a2108;border:0;border-radius:999px;padding:10px 22px;font-weight:700;font-size:1rem;margin-top:6px}
+.card ol{margin:4px 0 0;padding:0;list-style:none;counter-reset:q;text-align:left;display:grid;gap:6px}
+.card li{counter-increment:q;padding:10px 14px;border-radius:8px;background:#0000000f;font:600 1.1rem/1.25 system-ui,sans-serif}
+.card li::before{content:counter(q) ". ";font-weight:700}
+.card li.done{opacity:.45}
+.card li.done::after{content:" ✓"}
+.hint{margin:22px 0 8px;opacity:.8;text-align:center;font-size:.95rem}
+.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:460px}
+.chip{display:flex;align-items:center;gap:8px;background:transparent;color:var(--panel);border:1.5px solid #e9e4d655;border-radius:999px;padding:8px 14px}
+.chip i{width:12px;height:12px;border-radius:50%;display:block}
+.chip.off{opacity:.45;text-decoration:line-through}
+.row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:20px}
+.ghost{background:transparent;color:var(--panel);border:1.5px solid var(--panel);border-radius:999px;padding:10px 20px}
+.left{margin-top:14px;opacity:.7;font-size:.9rem}
+@media (prefers-reduced-motion:reduce){canvas{transition-duration:.5s}}
+</style>
+</head>
+<body>
+<h1>🏺 Tarix baraban o'yini</h1>
+<p class="sub">Barabanni aylantiring va mavzuni aniqlang</p>
+
+<div class="stage"><div class="ptr"></div><canvas id="cv" width="920" height="920" aria-label="Baraban"></canvas></div>
+<button class="spin" id="spin">AYLANTIRISH</button>
+
+<div class="card" id="card" aria-live="polite"></div>
+
+<p class="hint">Mavzuni o'chirish yoki qaytarish uchun ustiga bosing:</p>
+<div class="chips" id="chips"></div>
+
+<div class="row">
+  <button class="ghost" id="next">Keyingi savol ➜</button>
+  <button class="ghost" id="reset">Qayta boshlash</button>
+</div>
+<div class="left" id="left"></div>
+
+<script>
+const T=[
+ {n:"Shaxs",c:"#a63d2f",f:"#fff",d:"#a63d2f",q:["Viktoriya","Abdulhamid II","Vudro Vilson","Aleksandr II","Napoleon III","Vilgelm I"]},
+ {n:"Atama",c:"#2d4f9e",f:"#fff",d:"#2d4f9e",q:["Intervensiya","Dominion","Fashizm","Totalitar","Konsentratsiya","Anneksiya"]},
+ {n:"Konferensiya",c:"#d9a21b",f:"#2a2108",d:"#8a6410",q:["I Panamerika konferensiyasi","Vashington konferensiyasi","Myunxen kelishuvi","Berlin konferensiyasi","Versal konferensiyasi","Bryussel konferensiyasi"]},
+ {n:"Sanalar",c:"#5f7a3a",f:"#fff",d:"#4a6a2a",q:["1876-yil","1900-yil","1914-1918-yillar","1929-yil","1917-yil","1933-yil"]}
+];
+const $=id=>document.getElementById(id), cv=$("cv"), ctx=cv.getContext("2d"), S=cv.width, c=S/2, R=c-6;
+const off=new Set(), pos=[0,0,0,0];
+let P=[], n=0, rot=0, busy=false, pick=null;
+
+function draw(){
+  ctx.clearRect(0,0,S,S);
+  if(!n){
+    ctx.fillStyle="#2c4a50";ctx.beginPath();ctx.arc(c,c,R,0,7);ctx.fill();
+    ctx.fillStyle="#e9e4d6";ctx.textAlign="center";ctx.textBaseline="middle";ctx.font="700 40px Georgia";
+    ctx.fillText(T.every((_,t)=>pos[t]>=6)?"Savollar tugadi":"Mavzu tanlang",c,c);return;
+  }
+  const a=2*Math.PI/n;
+  P.forEach((t,k)=>{
+    const s=-Math.PI/2+k*a, th=T[t];
+    ctx.beginPath();ctx.moveTo(c,c);ctx.arc(c,c,R,s,s+a);ctx.closePath();
+    ctx.fillStyle=th.c;ctx.fill();ctx.strokeStyle="#e9e4d6";ctx.lineWidth=4;ctx.stroke();
+    ctx.save();ctx.translate(c,c);ctx.rotate(s+a/2);
+    ctx.fillStyle=th.f;ctx.textAlign="right";ctx.textBaseline="middle";
+    let fs=Math.min(64,a*R*.4);ctx.font="700 "+fs+"px Georgia";
+    const w=ctx.measureText(th.n).width, m=R-110;
+    if(w>m){fs*=m/w;ctx.font="700 "+fs+"px Georgia";}
+    ctx.fillText(th.n,R-30,0);ctx.restore();
+  });
+  ctx.beginPath();ctx.arc(c,c,52,0,7);ctx.fillStyle="#c9a24b";ctx.fill();
+  ctx.lineWidth=6;ctx.strokeStyle="#e9e4d6";ctx.stroke();
+}
+
+function show(){
+  const card=$("card");
+  if(busy){
+    card.innerHTML="<span>Baraban aylanmoqda…</span>";
+  }else if(pick!==null){
+    const th=T[pick], p=pos[pick];
+    card.innerHTML=
+      '<b style="color:'+th.d+'">'+th.n+'</b>'+
+      '<div class="progress">Savol '+(p+1)+' / '+th.q.length+'</div>'+
+      '<div class="question">'+th.q[p]+'</div>'+
+      '<button class="next-in-card" id="nextInCard">Keyingi savol ➜</button>';
+    $("nextInCard").onclick=nextQuestion;
+  }else if(!n){
+    card.innerHTML='<span class="w">'+(T.every((_,t)=>pos[t]>=6)?"Barcha savollar tugadi 🎉":"Kamida bitta mavzuni yoqing")+'</span>';
+  }else{
+    card.innerHTML="<span>Barabanni aylantiring</span>";
+  }
+  $("spin").disabled=busy||!n;
+  $("next").disabled=busy||pick===null;
+  $("left").textContent="Qolgan savollar: "+T.reduce((s,_,t)=>s+(off.has(t)?0:6-pos[t]),0);
+}
+
+function rebuild(){
+  P=T.map((_,t)=>t).filter(t=>!off.has(t));n=P.length;
+  cv.style.transition="none";rot=0;cv.style.transform="none";
+  draw();cv.offsetWidth;cv.style.transition="";
+  show();
+}
+
+function spin(){
+  if(busy||!n)return;
+  busy=true;
+  const k=Math.floor(Math.random()*n), a=360/n, jit=(Math.random()-.5)*a*.7;
+  const cur=((rot%360)+360)%360;
+  rot+=360*5+((((360-(k+.5)*a+jit-cur)%360)+360)%360);
+  cv.style.transform="rotate("+rot+"deg)";
+  pick=P[k];show();
+}
+cv.addEventListener("transitionend",()=>{
+  if(!busy)return;busy=false;show();
+  $("card").scrollIntoView({behavior:matchMedia("(prefers-reduced-motion:reduce)").matches?"auto":"smooth",block:"nearest"});
+});
+
+const chips=[];
+T.forEach((th,t)=>{
+  const b=document.createElement("button");
+  b.className="chip";b.innerHTML='<i style="background:'+th.c+'"></i>'+th.n;
+  b.onclick=()=>{
+    if(busy)return;
+    if(off.has(t)){off.delete(t);pos[t]=0;}else off.add(t);
+    b.classList.toggle("off",off.has(t));pick=null;rebuild();
+  };
+  chips.push(b);$("chips").appendChild(b);
+});
+
+$("spin").onclick=spin;
+
+function nextQuestion(){
+  if(pick===null||busy)return;
+  if(++pos[pick]>=6){
+    off.add(pick);
+    chips[pick].classList.add("off");
+    pick=null;
+    rebuild();
+  }else{
+    show();
+  }
+}
+
+$("next").onclick=nextQuestion;
+$("reset").onclick=()=>{
+  if(busy)return;
+  off.clear();pos.fill(0);pick=null;chips.forEach(b=>b.classList.remove("off"));rebuild();
+};
+
+rebuild();
+</script>
+</body>
+</html>
